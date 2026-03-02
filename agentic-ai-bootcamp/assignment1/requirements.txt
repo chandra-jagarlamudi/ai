@@ -1,7 +1,11 @@
 langchain-openai
 langchain-community
+langchain-ollama
+langchain-google-genai
 faiss-cpu
 python-dotenv
 pypdf
 streamlit
 watchdog
+google-generativeai
+ollama
