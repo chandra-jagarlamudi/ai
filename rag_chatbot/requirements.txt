@@ -1,0 +1,15 @@
+ipykernel 
+langchain-openai
+langchain-community
+faiss-cpu
+python-dotenv
+pypdf
+streamlit
+watchdog
+huggingface-hub
+transformers
+torch
+accelerate
+google-generativeai
+ollama
+requests
