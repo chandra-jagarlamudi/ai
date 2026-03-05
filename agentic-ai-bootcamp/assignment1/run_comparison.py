@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run the same RAG test questions against OpenAI, Ollama, and Gemini.
+Run the same RAG test questions against all configured comparison models.
 Records response time and response text. Use the output to fill COMPARISON_TABLE.md.
 
 Usage:
@@ -41,16 +41,25 @@ TEST_QUESTIONS = [
     ("Company values", "What are the company's core values or mission mentioned in the documents?"),
 ]
 
-# Models to compare: (label, llm_provider, llm_model) — values from .env
+# ── Comparison model list ──────────────────────────────────────────────────────
+# To add a model to the comparison, add one tuple here:
+#   (<env_var_for_model>, <provider>, <default_model>)
+# The provider must exist in PROVIDER_REGISTRY in rag_pipeline.py.
+_COMPARISON_PROVIDERS: list[tuple[str, str, str]] = [
+    ("OPENAI_CHAT_MODEL", "openai", "gpt-4o-mini"),
+    ("OLLAMA_CHAT_MODEL", "ollama", "gemma3:1b"),
+    ("GEMINI_CHAT_MODEL", "gemini", "gemini-2.5-flash"),
+]
+
+
 def _models_from_env() -> list[tuple[str, str, str]]:
-    openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
-    ollama_model = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:1b")
-    gemini_model = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
-    return [
-        (f"OpenAI ({openai_model})", "openai", openai_model),
-        (f"Ollama ({ollama_model})", "ollama", ollama_model),
-        (f"Gemini ({gemini_model})", "gemini", gemini_model),
-    ]
+    """Returns (label, llm_provider, llm_model) for each entry in _COMPARISON_PROVIDERS."""
+    models = []
+    for env_var, provider, default in _COMPARISON_PROVIDERS:
+        model = os.getenv(env_var, default)
+        label = f"{provider.title()} ({model})"
+        models.append((label, provider, model))
+    return models
 
 
 MODELS = _models_from_env()
@@ -58,7 +67,7 @@ MODELS = _models_from_env()
 
 def run_comparison(vectorstore, cfg, *, base_path: Path | None = None) -> tuple[list[dict], Path]:
     """
-    Run test questions against all models (OpenAI, Ollama, Gemini). Writes comparison_results.json.
+    Run test questions against all models in MODELS. Writes comparison_results.json.
 
     Returns (results, out_path). Can be called from Streamlit app or from CLI.
     """
@@ -146,7 +155,7 @@ def main() -> None:
     print(f"\nWrote {out_path}")
     print("\n--- Summary (Response Speed) ---\n")
     print(summary_table_markdown(results))
-    print("\nFill COMPARISON_TABLE.md with: Accuracy and Hallucination (manual); Speed from above; Cost and Ease of Setup (see README).")
+    print(f"\nFill COMPARISON_TABLE.md with: Accuracy and Hallucination (manual); Speed from above; Cost and Ease of Setup (see README).")
 
 
 if __name__ == "__main__":

@@ -61,12 +61,14 @@ with st.sidebar:
         st.rerun()
 
     comp_vectorstore = load_vectorstore(comp_cfg)
-    if st.button("Run comparison (all 3 models)"):
+    _model_count = len(MODELS)
+    if st.button(f"Run comparison ({_model_count} models)"):
         if comp_vectorstore is None:
             st.session_state.last_comparison_error = "Build the comparison vectorstore first (button above)."
             logger.warning("Comparison: run requested but comparison vectorstore missing")
         else:
-            with st.spinner("Running test questions against OpenAI, Ollama, Gemini…"):
+            _model_names = ", ".join(m[0] for m in MODELS)
+            with st.spinner(f"Running test questions against {_model_names}…"):
                 try:
                     logger.info("Comparison: run started")
                     results, out_path = run_comparison(comp_vectorstore, comp_cfg)

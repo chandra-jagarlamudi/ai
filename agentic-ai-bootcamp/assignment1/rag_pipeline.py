@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
@@ -23,9 +23,84 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from langchain_community.vectorstores import FAISS
 
-# Type definitions for LLM and Embedding providers
-LLMProvider = Literal["openai", "ollama", "gemini"]
-EmbeddingProvider = Literal["openai", "ollama", "gemini"]
+# Open string types — any registered provider name is valid.
+LLMProvider = str
+EmbeddingProvider = str
+
+
+# ── Provider factory functions ─────────────────────────────────────────────────
+# Each function receives a RAGConfig and returns the appropriate LLM / Embeddings.
+
+def _make_openai_llm(cfg: "RAGConfig") -> BaseChatModel:
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(model=cfg.llm_model)
+
+def _make_openai_embeddings(cfg: "RAGConfig") -> Embeddings:
+    from langchain_openai import OpenAIEmbeddings
+    return OpenAIEmbeddings(model=cfg.embedding_model)
+
+def _make_gemini_llm(cfg: "RAGConfig") -> BaseChatModel:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(model=cfg.llm_model)
+
+def _make_gemini_embeddings(cfg: "RAGConfig") -> Embeddings:
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    return GoogleGenerativeAIEmbeddings(model=cfg.embedding_model)
+
+def _make_ollama_llm(cfg: "RAGConfig") -> BaseChatModel:
+    from langchain_ollama import ChatOllama
+    return ChatOllama(model=cfg.llm_model, base_url=cfg.ollama_base_url)
+
+def _make_ollama_embeddings(cfg: "RAGConfig") -> Embeddings:
+    try:
+        from langchain_ollama import OllamaEmbeddings
+    except Exception:
+        from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
+    return OllamaEmbeddings(model=cfg.embedding_model, base_url=cfg.ollama_base_url)
+
+
+# ── Provider registry ──────────────────────────────────────────────────────────
+# To add a new provider, add one entry here — no other code changes needed.
+#
+# Each entry must have:
+#   default_llm_model       – fallback model name if LLM_MODEL / llm_model_env not set
+#   llm_model_env           – env var that overrides the LLM model (e.g. OPENAI_CHAT_MODEL)
+#   default_embedding_model – fallback embedding model
+#   make_llm                – factory: (RAGConfig) -> BaseChatModel
+#   make_embeddings         – factory: (RAGConfig) -> Embeddings
+#
+# Example — adding Anthropic Claude:
+#   "anthropic": {
+#       "default_llm_model": "claude-sonnet-4-6",
+#       "llm_model_env": "ANTHROPIC_CHAT_MODEL",
+#       "default_embedding_model": "text-embedding-3-small",  # use openai embeddings
+#       "make_llm": _make_anthropic_llm,
+#       "make_embeddings": _make_openai_embeddings,
+#   },
+PROVIDER_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "openai": {
+        "default_llm_model": "gpt-4o-mini",
+        "llm_model_env": "OPENAI_CHAT_MODEL",
+        "default_embedding_model": "text-embedding-3-small",
+        "make_llm": _make_openai_llm,
+        "make_embeddings": _make_openai_embeddings,
+    },
+    "gemini": {
+        "default_llm_model": "gemini-2.5-flash",
+        "llm_model_env": "GEMINI_CHAT_MODEL",
+        "default_embedding_model": "gemini-embedding-001",
+        "make_llm": _make_gemini_llm,
+        "make_embeddings": _make_gemini_embeddings,
+    },
+    "ollama": {
+        "default_llm_model": "gemma",
+        "llm_model_env": "OLLAMA_CHAT_MODEL",
+        "default_embedding_model": "nomic-embed-text",
+        "make_llm": _make_ollama_llm,
+        "make_embeddings": _make_ollama_embeddings,
+    },
+}
+
 
 # RAGConfig class for the RAG pipeline configuration and configuration for the comparison run
 @dataclass(frozen=True)
@@ -49,33 +124,31 @@ class RAGConfig:
 # Default configuration for the RAG pipeline
 def default_config() -> RAGConfig:
     base = Path(__file__).resolve().parent
-    llm_provider: LLMProvider = os.getenv("LLM_PROVIDER", "openai").lower()  # type: ignore[assignment]
-    embedding_provider: EmbeddingProvider = os.getenv("EMBEDDING_PROVIDER", "openai").lower()  # type: ignore[assignment]
+    llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
+    embedding_provider = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
 
-    # Backwards compatible model env vars
-    llm_model = os.getenv("LLM_MODEL")
-    if llm_provider == "openai":
-        llm_model = os.getenv("OPENAI_CHAT_MODEL", llm_model or "gpt-4o-mini")
-    elif llm_provider == "ollama":
-        llm_model = os.getenv("OLLAMA_CHAT_MODEL", llm_model or "gemma")
-    elif llm_provider == "gemini":
-        llm_model = os.getenv("GEMINI_CHAT_MODEL", llm_model or "gemini-2.5-flash")
-    else:
+    # Resolve LLM provider and model from registry
+    llm_spec = PROVIDER_REGISTRY.get(llm_provider)
+    if llm_spec is None:
+        logger.warning("Unknown LLM_PROVIDER=%s, falling back to openai", llm_provider)
         llm_provider = "openai"
-        llm_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+        llm_spec = PROVIDER_REGISTRY["openai"]
+    llm_model = (
+        os.getenv(llm_spec["llm_model_env"])
+        or os.getenv("LLM_MODEL")
+        or llm_spec["default_llm_model"]
+    )
 
-    # Default embedding model per provider (Gemini: use gemini-embedding-001; text-embedding-004 is shut down)
-    default_embedding = "text-embedding-3-small"
-    if embedding_provider == "gemini":
-        default_embedding = "gemini-embedding-001"
-    elif embedding_provider == "ollama":
-        default_embedding = "nomic-embed-text"
-    embedding_model = os.getenv("EMBEDDING_MODEL") or default_embedding
+    # Resolve embedding provider and model from registry
+    emb_spec = PROVIDER_REGISTRY.get(embedding_provider)
+    if emb_spec is None:
+        logger.warning("Unknown EMBEDDING_PROVIDER=%s, falling back to openai", embedding_provider)
+        embedding_provider = "openai"
+        emb_spec = PROVIDER_REGISTRY["openai"]
+    embedding_model = os.getenv("EMBEDDING_MODEL") or emb_spec["default_embedding_model"]
 
-    # App chat: default to provider-specific vectorstore (vectorstore_openai, vectorstore_ollama, vectorstore_gemini)
-    vectorstore_dir = os.getenv("VECTORSTORE_DIR")
-    if not vectorstore_dir:
-        vectorstore_dir = str(base / f"vectorstore_{llm_provider}")
+    # App chat: default to provider-specific vectorstore (e.g. vectorstore_openai)
+    vectorstore_dir = os.getenv("VECTORSTORE_DIR") or str(base / f"vectorstore_{llm_provider}")
 
     cfg = RAGConfig(
         data_dir=Path(os.getenv("DATA_DIR", str(base / "data"))),
@@ -83,7 +156,7 @@ def default_config() -> RAGConfig:
         chunk_size=int(os.getenv("CHUNK_SIZE", "1000")),
         chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
         top_k=int(os.getenv("TOP_K", "3")),
-        embedding_provider=embedding_provider if embedding_provider in ("openai", "ollama", "gemini") else "openai",
+        embedding_provider=embedding_provider,
         embedding_model=embedding_model,
         llm_provider=llm_provider,
         llm_model=llm_model,
@@ -106,11 +179,11 @@ def config_for_llm(base: RAGConfig, llm_provider: LLMProvider, llm_model: str) -
     return replace(base, llm_provider=llm_provider, llm_model=llm_model)
 
 
-# Config for the comparison run: one shared vectorstore (e.g. vectorstore_comparison) with OpenAI embeddings so all three LLMs run against the same index.
+# Config for the comparison run: one shared vectorstore (e.g. vectorstore_comparison) with OpenAI embeddings so all LLMs run against the same index.
 def comparison_config() -> RAGConfig:
     """
     Config for the comparison run: one shared vectorstore (e.g. vectorstore_comparison)
-    with OpenAI embeddings so all three LLMs run against the same index.
+    with OpenAI embeddings so all LLMs run against the same index.
     Uses COMPARISON_EMBEDDING_MODEL (or text-embedding-3-small) so the comparison
     index never uses a non-OpenAI embedding model from EMBEDDING_MODEL.
     """
@@ -159,53 +232,26 @@ def split_documents(docs: List[Document], *, chunk_size: int, chunk_overlap: int
     return splitter.split_documents(docs)
 
 
-# Get the embeddings for the vectorstore
 def get_embeddings(cfg: RAGConfig) -> Embeddings:
-    if cfg.embedding_provider == "openai":
-        from langchain_openai import OpenAIEmbeddings
-
-        logger.info("Embeddings selected: openai:%s", cfg.embedding_model)
-        return OpenAIEmbeddings(model=cfg.embedding_model)
-
-    if cfg.embedding_provider == "gemini":
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
-        # Use gemini-embedding-001 (text-embedding-004 and models/embedding-001 are deprecated)
-        logger.info("Embeddings selected: gemini:%s", cfg.embedding_model)
-        return GoogleGenerativeAIEmbeddings(model=cfg.embedding_model)
-
-    if cfg.embedding_provider == "ollama":
-        try:
-            from langchain_ollama import OllamaEmbeddings
-        except Exception:
-            from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
-
-        logger.info("Embeddings selected: ollama:%s base_url=%s", cfg.embedding_model, cfg.ollama_base_url)
-        return OllamaEmbeddings(model=cfg.embedding_model, base_url=cfg.ollama_base_url)
-
-    raise ValueError(f"Unsupported embedding_provider: {cfg.embedding_provider}")
+    spec = PROVIDER_REGISTRY.get(cfg.embedding_provider)
+    if spec is None:
+        raise ValueError(
+            f"Unsupported embedding_provider: {cfg.embedding_provider!r}. "
+            f"Register it in PROVIDER_REGISTRY in rag_pipeline.py."
+        )
+    logger.info("Embeddings selected: %s:%s", cfg.embedding_provider, cfg.embedding_model)
+    return spec["make_embeddings"](cfg)
 
 
 def get_llm(cfg: RAGConfig) -> BaseChatModel:
-    if cfg.llm_provider == "openai":
-        from langchain_openai import ChatOpenAI
-
-        logger.info("LLM selected: openai:%s", cfg.llm_model)
-        return ChatOpenAI(model=cfg.llm_model)
-
-    if cfg.llm_provider == "gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        logger.info("LLM selected: gemini:%s", cfg.llm_model)
-        return ChatGoogleGenerativeAI(model=cfg.llm_model)
-
-    if cfg.llm_provider == "ollama":
-        from langchain_ollama import ChatOllama
-
-        logger.info("LLM selected: ollama:%s base_url=%s", cfg.llm_model, cfg.ollama_base_url)
-        return ChatOllama(model=cfg.llm_model, base_url=cfg.ollama_base_url)
-
-    raise ValueError(f"Unsupported llm_provider: {cfg.llm_provider}")
+    spec = PROVIDER_REGISTRY.get(cfg.llm_provider)
+    if spec is None:
+        raise ValueError(
+            f"Unsupported llm_provider: {cfg.llm_provider!r}. "
+            f"Register it in PROVIDER_REGISTRY in rag_pipeline.py."
+        )
+    logger.info("LLM selected: %s:%s", cfg.llm_provider, cfg.llm_model)
+    return spec["make_llm"](cfg)
 
 
 def _vectorstore_meta(cfg: RAGConfig) -> Dict[str, Any]:
@@ -333,4 +379,3 @@ def rag_answer(
         "sources": sorted({str(d.metadata.get("source", "")) for d in docs if d.metadata}),
     }
     return text, meta
-

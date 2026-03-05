@@ -9,3 +9,4 @@ streamlit
 watchdog
 google-generativeai
 ollama
+langchain_ollama
