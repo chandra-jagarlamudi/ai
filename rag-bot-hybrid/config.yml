@@ -1,0 +1,67 @@
+app:
+  title: "Hybrid RAG System"
+
+retrieval:
+  default_mode: "hybrid"
+  top_k: 12
+  rrf_k: 60
+
+reranking:
+  enabled: true
+  model_name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  top_n: 5
+
+sources:
+  show: true          # Toggle source panel on/off
+  preview_chars: 300  # Characters of chunk text shown in preview
+
+evaluation:
+  enabled: true
+  show_panel: true
+  log_path: "eval_logs/interactions.jsonl"
+  dataset_path: "eval_data/eval_dataset.jsonl"
+  batch_output_path: "eval_logs/batch_eval_results.jsonl"
+  recent_rows: 20
+
+ingestion:
+  chunk_size: 1000
+  chunk_overlap: 120
+
+indexes:
+  elastic_index_name: "docs"
+  qdrant_collection_name: "docs"
+
+profiles:
+  poc:
+    description: "POC using local infra and API-first models"
+    stores:
+      keyword: "elasticsearch"
+      vector: "qdrant"
+    embedding:
+      provider: "openai"
+      model: "text-embedding-3-small"
+      dims: 1536
+    reranker:
+      provider: "local"
+      model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    generator:
+      provider: "openai"
+      model: "gpt-4o-mini"
+      fallback_provider: "gemini"
+      fallback_model: "gemini-1.5-flash"
+
+  production:
+    description: "Large-scale profile for managed infrastructure"
+    stores:
+      keyword: "elasticsearch_managed"
+      vector: "pinecone"
+    embedding:
+      provider: "openai"
+      model: "text-embedding-3-large"
+      dims: 3072
+    reranker:
+      provider: "cohere"
+      model: "rerank-v3.5"
+    generator:
+      provider: "configurable"
+      model: "gpt-4o"

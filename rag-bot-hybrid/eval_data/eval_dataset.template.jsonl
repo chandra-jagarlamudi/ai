@@ -1,0 +1,2 @@
+{"id":"q1","query":"What are the key components of this architecture?","expected_answer":"It includes keyword retrieval, vector retrieval, reranking, and answer generation.","expected_sources":[{"source":"hybrid_retrieval_system.pdf","page":1}]}
+{"id":"q2","query":"Why is hybrid retrieval used instead of keyword only?","expected_answer":"Hybrid retrieval combines lexical precision and semantic recall for better coverage.","expected_sources":[{"source":"hybrid_retrieval_system.pdf","page":2}]}

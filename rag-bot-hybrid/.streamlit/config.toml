@@ -1,0 +1,6 @@
+[server]
+# Avoid noisy torch.classes path-inspection warnings from file watcher internals.
+fileWatcherType = "none"
+
+[logger]
+level = "info"
