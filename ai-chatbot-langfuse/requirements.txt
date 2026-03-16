@@ -1,0 +1,13 @@
+# AI chatbot with mandatory Langfuse tracing
+python-dotenv
+streamlit
+watchdog
+huggingface-hub
+transformers
+torch
+accelerate
+google-generativeai
+ollama
+requests
+langfuse
+langchain-openai

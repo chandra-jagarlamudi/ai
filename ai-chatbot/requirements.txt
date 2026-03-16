@@ -1,11 +1,6 @@
-# Modules required for the AI chatbot application
 python-dotenv
 streamlit
-watchdog
-huggingface-hub
-transformers
-torch
-accelerate
+openai
 google-generativeai
+huggingface-hub
 ollama
-requests
