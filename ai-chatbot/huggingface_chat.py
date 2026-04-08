@@ -13,16 +13,14 @@ def is_configured() -> bool:
     return bool(os.getenv("HF_API_TOKEN"))
 
 
-def chat(prompt: str) -> str:
+def chat(prompt: str, history: list[dict] | None = None) -> str:
     try:
         client = InferenceClient(
             provider=_PROVIDER,
             api_key=os.getenv("HF_API_TOKEN"),
         )
-        response = client.chat.completions.create(
-            model=_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        messages = list(history or []) + [{"role": "user", "content": prompt}]
+        response = client.chat.completions.create(model=_MODEL, messages=messages)
         return response.choices[0].message.content
     except Exception as e:
         logger.error(f"HuggingFace error: {e}")

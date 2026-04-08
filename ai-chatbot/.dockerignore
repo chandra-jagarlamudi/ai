@@ -1,0 +1,19 @@
+# Never bake secrets or local state into the Docker image.
+# Secrets are injected at runtime via env_file in docker-compose.yml;
+# local state (data/) is mounted as a volume.
+.env
+data/
+
+# Python artifacts
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Editor / OS noise
+.DS_Store
+.idea
+.vscode
+*.swp

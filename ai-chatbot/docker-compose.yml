@@ -1,0 +1,54 @@
+# Docker Compose — local development
+#
+# Concepts:
+#   services   — each entry is one container
+#   build      — tells Compose to build from the local Dockerfile
+#   ports      — "host:container" port mapping so your browser can reach the app
+#   volumes    — mount host paths into the container (used here to persist the
+#                SQLite DB file across container restarts)
+#   environment — override env vars inside the container
+#   extra_hosts — adds an /etc/hosts entry so "host.docker.internal" resolves to
+#                 your Mac's IP from inside the container (needed on Linux;
+#                 Docker Desktop on Mac handles this automatically)
+
+services:
+  chatbot:
+    build: .
+    ports:
+      - "8501:8501"
+
+    # env_file is the Docker-native way to pass secrets into a container.
+    # Docker Compose reads your .env file on the host and injects every
+    # KEY=VALUE as a real environment variable inside the container.
+    # The file itself is NOT copied into the image — only the values are passed
+    # at runtime, so secrets never end up baked into the image layer.
+    #
+    # This covers: OPENAI_API_KEY, GOOGLE_API_KEY, HF_API_TOKEN, and all other
+    # keys in your .env. Cloud APIs (OpenAI, HuggingFace, Gemini) are reachable
+    # from inside Docker over the normal internet — no special routing needed.
+    env_file:
+      - .env
+
+    volumes:
+      # Mount a directory (not a single file) for the SQLite database.
+      #
+      # Why a directory and not a file?
+      # If you mount a file path that doesn't exist yet on the host, Docker
+      # creates it as a *directory*, which SQLite cannot open as a database.
+      # Mounting a directory avoids this entirely — Docker creates "./data/" as
+      # a directory on the host, the app creates the .db file inside it at
+      # runtime.
+      - ./data:/app/data
+
+    environment:
+      # This overrides the OLLAMA_BASE_URL that may be set in .env.
+      # "environment:" has higher precedence than "env_file:", so this always
+      # wins — ensuring the container talks to host Ollama, not localhost.
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+
+    # Makes host.docker.internal resolve correctly on Linux.
+    # On macOS with Docker Desktop this is already set up automatically.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    restart: unless-stopped
