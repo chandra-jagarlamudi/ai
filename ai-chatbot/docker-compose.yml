@@ -4,9 +4,8 @@
 #   services   — each entry is one container
 #   build      — tells Compose to build from the local Dockerfile
 #   ports      — "host:container" port mapping so your browser can reach the app
-#   volumes    — mount host paths into the container (two uses here: persist the
-#                SQLite DB file, and inject your .env without baking secrets into
-#                the image)
+#   volumes    — mount host paths into the container (used here to persist the
+#                SQLite DB file across container restarts)
 #   environment — override env vars inside the container
 #   extra_hosts — adds an /etc/hosts entry so "host.docker.internal" resolves to
 #                 your Mac's IP from inside the container (needed on Linux;

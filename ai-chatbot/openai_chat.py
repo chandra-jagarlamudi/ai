@@ -6,13 +6,15 @@ logger = logging.getLogger(__name__)
 
 NAME = "OpenAI"
 
+_FALLBACK_MODEL = "gpt-4o-mini"
+
 # OPENAI_MODEL may be a single model or a comma-separated list.
 # e.g. "gpt-4o-mini,gpt-4.1-nano-2025-04-14,gpt-5-nano-2025-08-07"
 MODELS: list[str] = [
     m.strip()
-    for m in os.getenv("OPENAI_MODEL", "gpt-4o-mini").split(",")
+    for m in os.getenv("OPENAI_MODEL", _FALLBACK_MODEL).split(",")
     if m.strip()
-]
+] or [_FALLBACK_MODEL]
 DEFAULT_MODEL = MODELS[0]
 
 

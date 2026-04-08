@@ -272,10 +272,10 @@ automatically before sending.
 
 ---
 
-## Persistent chat history (SQLite — Ollama only)
+## Persistent chat history (SQLite — Ollama and OpenAI)
 
-Chat history for the Ollama tab is persisted to disk in a SQLite database so
-conversations survive page refreshes and container restarts.
+Chat history for the Ollama and OpenAI tabs is persisted to disk in a SQLite
+database so conversations survive page refreshes and container restarts.
 
 > **What is SQLite?**
 > An embedded database — the entire database lives in a single `.db` file on
@@ -388,6 +388,7 @@ Turn 3:  send [all 4 messages so far, user: "Which is faster?"]
 ```
 
 The app stores all messages in `st.session_state` (in-memory, current browser
-session) for all providers, and additionally in SQLite (persists across
-refreshes) for the Ollama tab. On every submission, the full accumulated history
-is passed to the API before the new prompt.
+session) for all providers. The Ollama and OpenAI tabs additionally persist
+history to SQLite so conversations survive page refreshes and container restarts.
+Gemini and HuggingFace are in-memory only. On every submission, the full
+accumulated history is passed to the API before the new prompt.

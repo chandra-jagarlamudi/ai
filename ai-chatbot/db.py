@@ -39,7 +39,8 @@ def init_db():
         """)
 
         # Migration: add `model` column to existing databases that predate this change.
-        # ALTER TABLE fails silently if the column already exists — that's intentional.
+        # SQLite raises OperationalError if the column already exists; we catch and
+        # ignore it so this migration is safe to run on every startup.
         try:
             conn.execute("ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
@@ -84,7 +85,7 @@ def list_sessions(provider: str) -> list[dict]:
 def load_messages(session_id: str) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at ASC",
+            "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC",
             (session_id,),
         ).fetchall()
     return [dict(r) for r in rows]
