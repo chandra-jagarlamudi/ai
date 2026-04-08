@@ -1,5 +1,6 @@
 # Never bake secrets or local state into the Docker image.
-# These are injected at runtime via volume mounts instead.
+# Secrets are injected at runtime via env_file in docker-compose.yml;
+# local state (data/) is mounted as a volume.
 .env
 data/
 
