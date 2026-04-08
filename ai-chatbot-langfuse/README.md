@@ -31,6 +31,28 @@ Run:
 streamlit run ai_chatbot.py
 ```
 
+## Dev Container
+
+This project includes a VS Code dev container for a consistent Python 3.12 setup.
+
+1. Open the project in VS Code.
+2. Run "Dev Containers: Reopen in Container".
+3. Wait for the post-create step to create `.venv` and install dependencies from `requirements.txt`.
+
+Then copy environment variables and run the app inside the container:
+
+```bash
+cp .env.example .env
+. .venv/bin/activate
+streamlit run ai_chatbot.py
+```
+
+The Streamlit app is available on forwarded port `8501`.
+Langfuse does not need a forwarded port when you use Langfuse Cloud because the app sends traces outbound over HTTPS.
+
+If you run self-hosted Langfuse on your host machine while the app runs inside the dev container, set `LANGFUSE_BASE_URL=http://host.docker.internal:3000` in `.env`.
+Port `3000` only needs to be exposed if you also want to open the Langfuse UI in your browser.
+
 ## Environment Variables
 
 ### Required — Langfuse
@@ -39,9 +61,9 @@ streamlit run ai_chatbot.py
 |------------------------|-----------------------------------------------------------|
 | `LANGFUSE_PUBLIC_KEY`  | From your Langfuse project settings                       |
 | `LANGFUSE_SECRET_KEY`  | From your Langfuse project settings                       |
-| `LANGFUSE_BASE_URL`    | e.g. `http://localhost:3000` (self-hosted) or cloud URL   |
+| `LANGFUSE_BASE_URL`    | e.g. `http://host.docker.internal:3000` from the dev container, or your cloud URL   |
 
-The app will **not start** if Langfuse keys are missing.
+The app will **not start** if Langfuse keys are missing or invalid.
 
 ### Per-provider (optional)
 

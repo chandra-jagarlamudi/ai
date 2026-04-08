@@ -25,6 +25,14 @@ if not os.getenv("LANGFUSE_PUBLIC_KEY") or not os.getenv("LANGFUSE_SECRET_KEY"):
 try:
     from langfuse import get_client
     _langfuse = get_client()
+    try:
+        _langfuse.auth_check()
+    except Exception as e:
+        logger.error(f"Langfuse auth check failed: {e}")
+        raise ValueError(
+            "Langfuse authentication failed. Verify LANGFUSE_PUBLIC_KEY, "
+            "LANGFUSE_SECRET_KEY, and LANGFUSE_BASE_URL in .env."
+        ) from e
 except Exception as e:
     logger.error(f"Langfuse client init failed: {e}")
     raise
@@ -80,8 +88,9 @@ def query_with_trace(provider_key: str, prompt: str) -> str:
     if provider is None:
         return f"Error: Provider '{provider_key}' is not configured. Check .env and try again."
 
+    trace_id = _langfuse.create_trace_id()
+
     try:
-        trace_id = _langfuse.create_trace_id()
         with _langfuse.start_as_current_observation(
             name="chatbot-query",
             trace_context={"trace_id": trace_id},
@@ -94,7 +103,7 @@ def query_with_trace(provider_key: str, prompt: str) -> str:
                         name="llm",
                         as_type="generation",
                         input=prompt,
-                        model=provider.name,
+                        model=provider.model_name if getattr(provider, "model_name", None) else provider.name,
                     ) as gen:
                         response = provider.query(prompt)
                         gen.update(output=response)
@@ -106,10 +115,8 @@ def query_with_trace(provider_key: str, prompt: str) -> str:
                     pass
                 logger.error(f"Provider error: {e}\n{traceback.format_exc()}")
                 return f"Error: {e}"
-    except Exception as e:
-        if "Langfuse" not in str(type(e).__name__):
-            logger.error(f"Langfuse/tracing error (request continues): {e}")
+    finally:
         try:
-            return provider.query(prompt)
-        except Exception as init_e:
-            return f"Error: {init_e}"
+            _langfuse.flush()
+        except Exception as e:
+            logger.warning(f"Langfuse flush failed: {e}")
